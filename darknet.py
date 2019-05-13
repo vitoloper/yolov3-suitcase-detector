@@ -5,6 +5,23 @@ import torch.nn as nn
 import torch.nn.functional as F 
 from torch.autograd import Variable
 import numpy as np
+from util import *
+
+
+def get_test_input():
+    """
+    Get input test image
+
+    """
+
+    img = cv2.imread("dog-cycle-car.png")
+    img = cv2.resize(img, (416,416))          #Resize to the input dimension
+    img_ =  img[:,:,::-1].transpose((2,0,1))  # BGR -> RGB | H X W C -> C X H X W 
+    img_ = img_[np.newaxis,:,:,:]/255.0       #Add a channel at 0 (for batch) | Normalise
+    img_ = torch.from_numpy(img_).float()     #Convert to float
+    img_ = Variable(img_)                     # Convert to Variable
+    return img_
+
 
 class EmptyLayer(nn.Module):
     def __init__(self):
@@ -47,7 +64,6 @@ def parse_cfg(cfgfile):
     blocks.append(block)
 
     return blocks
-
 
 def create_modules(blocks):
     net_info = blocks[0]            # Captures the information about the input and pre-processing    
@@ -154,3 +170,86 @@ def create_modules(blocks):
 # Test the creation of the layers
 blocks = parse_cfg("cfg/yolov3.cfg")
 print(create_modules(blocks))
+
+
+class Darknet(nn.Module):
+    """Darknet class"""
+    def __init__(self, cfgfile):
+        super(Darknet, self).__init__()
+        self.blocks = parse_cfg(cfgfile)
+        self.net_info, self.module_list = create_modules(self.blocks)
+
+    def forward(self, x, CUDA):
+        modules = self.blocks[1:]   # first element is a net block which isn't part of the forward pass
+        outputs = {}   #We cache the outputs for the route layer
+
+        # This flag is used to indicate whether we have encountered the first detection or not.
+        # If 0: the collector hasn't been initialized.
+        # If 1: the collector has been initialized and we can concatenate our detection maps to it.
+        write = 0
+
+        # iterate over modules
+        for i, module in enumerate(modules):        
+            module_type = (module["type"])
+
+            # if module is convolutional or upsample
+            if module_type == "convolutional" or module_type == "upsample":
+                x = self.module_list[i](x)
+
+            elif module_type == "route":
+                layers = module["layers"]
+                layers = [int(a) for a in layers]
+    
+                if (layers[0]) > 0:
+                    layers[0] = layers[0] - i
+    
+                if len(layers) == 1:
+                    x = outputs[i + (layers[0])]
+    
+                else:
+                    if (layers[1]) > 0:
+                        layers[1] = layers[1] - i
+    
+                    map1 = outputs[i + layers[0]]
+                    map2 = outputs[i + layers[1]]
+                    x = torch.cat((map1, map2), 1)
+                
+    
+            elif  module_type == "shortcut":
+                from_ = int(module["from"])
+                x = outputs[i-1] + outputs[i+from_]
+
+            elif module_type == 'yolo':        
+                anchors = self.module_list[i][0].anchors
+                #Get the input dimensions
+                inp_dim = int (self.net_info["height"])
+        
+                #Get the number of classes
+                num_classes = int (module["classes"])
+        
+                #Transform 
+                x = x.data
+                # NOTE: predict_transform defined in util.py
+                # It takes a detection feature map and turns it into a 2D tensor.
+                # Each row of the tensor corresponds to attributes of a bounding box.
+                x = predict_transform(x, inp_dim, anchors, num_classes, CUDA)
+                if not write:              #if no collector has been intialised. 
+                    detections = x
+                    write = 1
+        
+                else:
+                    detections = torch.cat((detections, x), 1)
+
+            outputs[i] = x
+
+        return detections
+
+model = Darknet("cfg/yolov3.cfg")
+inp = get_test_input();
+pred = model(inp, torch.cuda.is_available())
+# We should have a tensor of size torch.Size([1, 10647, 85])
+# first dimension is batch size (just one test image)
+# each row in the matrix 10647x85 is a bounding box
+# (85 because we have 4 bbox attributes, 1 objectness score and 80 class scores)
+print(pred)
+print(pred.size())
