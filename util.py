@@ -7,6 +7,16 @@ from torch.autograd import Variable
 import numpy as np
 import cv2
 
+def load_classes(namesfile):
+    """
+    Load classes names from file
+
+    """
+
+    fp = open(namesfile, "r")
+    names = fp.read().split("\n")[:-1]
+    return names
+
 def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True):
     """
     Takes a detection feature map and turns it into a 2D sensor.
@@ -103,6 +113,11 @@ def write_results(prediction, confidence, num_classes, nms_conf = 0.4):
     """
     Use NMS (non maximum suppression) to obtain the 'true' detections
 
+    This function write_results outputs a tensor of shape D x 8.
+    D is the 'true' detection in all of the images, each represented by a row.
+    Each detection has 8 attributes: index of the image in the batch, 4 corner coords,
+    objectness score, score of the class with maximum confidence, index of that class.
+
     """
 
     # For each of the bbox having an objectness score below a threshold
@@ -144,7 +159,7 @@ def write_results(prediction, confidence, num_classes, nms_conf = 0.4):
             continue
 
         # For PyTorch 0.4 compatibility
-        if image_pred._shape[0] == 0:
+        if image_pred_.shape[0] == 0:
             continue
 
         # Get the various classes detected in the image
@@ -187,11 +202,6 @@ def write_results(prediction, confidence, num_classes, nms_conf = 0.4):
                 
             batch_ind = image_pred_class.new(image_pred_class.size(0), 1).fill_(ind)      #Repeat the batch_id for as many detections of the class cls in the image
             seq = batch_ind, image_pred_class
-            
-            # The function write_results outputs a tensor of shape D x 8.
-            # D is the 'true' detection in all of the images, each represented by a row.
-            # Each detection has 8 attributes: index of the image in the batch, 4 corner coords,
-            # objectness score, score of the class with maximum confidence, index of that class.
 
             # NOTE: write indicates if tensor has been initialized or not.
             if not write:
@@ -206,3 +216,33 @@ def write_results(prediction, confidence, num_classes, nms_conf = 0.4):
         return output
     except:
         return 0
+
+def letterbox_image(img, inp_dim):
+    """
+    Resize image with unchanged aspect ratio using padding
+
+    """
+
+    img_w, img_h = img.shape[1], img.shape[0]
+    w, h = inp_dim
+    new_w = int(img_w * min(w/img_w, h/img_h))
+    new_h = int(img_h * min(w/img_w, h/img_h))
+    resized_image = cv2.resize(img, (new_w,new_h), interpolation = cv2.INTER_CUBIC)
+    
+    canvas = np.full((inp_dim[1], inp_dim[0], 3), 128)
+
+    canvas[(h-new_h)//2:(h-new_h)//2 + new_h,(w-new_w)//2:(w-new_w)//2 + new_w,  :] = resized_image
+    
+    return canvas
+
+def prep_image(img, inp_dim):
+    """
+    Prepare image for inputting to the neural network. 
+    
+    Returns a Variable 
+    """
+    
+    img = (letterbox_image(img, (inp_dim, inp_dim)))
+    img = img[:,:,::-1].transpose((2,0,1)).copy()
+    img = torch.from_numpy(img).float().div(255.0).unsqueeze(0)
+    return img

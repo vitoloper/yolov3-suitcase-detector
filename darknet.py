@@ -340,13 +340,18 @@ class Darknet(nn.Module):
                 conv.weight.data.copy_(conv_weights)
 
 
-model = Darknet("cfg/yolov3.cfg")
-model.load_weights("yolov3.weights")
-inp = get_test_input();
-pred = model(inp, torch.cuda.is_available())
+# NOTE:  the following lines are for testing purposes only
+
+# model = Darknet("cfg/yolov3.cfg")
+# model.load_weights("yolov3.weights")
+
+# inp = get_test_input();
+# pred = model(inp, torch.cuda.is_available())
+
 # We should have a tensor of size torch.Size([1, 10647, 85])
 # first dimension is batch size (just one test image)
 # each row in the matrix 10647x85 is a bounding box
 # (85 because we have 4 bbox attributes, 1 objectness score and 80 class scores)
-print(pred)
-print(pred.size())
+
+# print(pred)
+# print(pred.size())
