@@ -13,6 +13,7 @@ from darknet import Darknet
 import pickle as pkl
 import pandas as pd
 import random
+from texttable import Texttable
 
 def arg_parse():
     """
@@ -126,9 +127,7 @@ for i, batch in enumerate(im_batches):
     # prediction[:, 6] is score of the class with maximum confidence (class confidence score)
     # class confidence score = box confidence score x conditional class probability
     prediction = write_results(prediction, confidence, num_classes, nms_conf = nms_thesh)
-    print(prediction[:, 5])
-    print(prediction[:, 6])
-
+    
     end = time.time()
 
     # if prediction is an int it means there is no object detected (it will be prediction = 0)
@@ -156,6 +155,12 @@ for i, batch in enumerate(im_batches):
         print("{0:20s} {1:s}".format("Objects Detected:", " ".join(objs)))
 
         # TODO: print box confidence score and class confidence score for each object
+        t = Texttable()
+        t.add_row(["Object", "Image index", "Objectness score", "Class conf. score", "Class index"])
+        # Create table from prediction tensor
+        for i, pred_row in enumerate(prediction.tolist()):
+            t.add_row([objs[i], pred_row[0], pred_row[5], pred_row[6], pred_row[7]])
+        print(t.draw())
         print("----------------------------------------------------------")
 
     if CUDA:
