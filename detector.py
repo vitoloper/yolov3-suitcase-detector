@@ -10,6 +10,7 @@ import argparse
 import os 
 import os.path as osp
 from darknet import Darknet
+import config
 import pickle as pkl
 import pandas as pd
 import random
@@ -41,6 +42,8 @@ def arg_parse():
     parser.add_argument("--reso", dest = 'reso', help = 
                         "Input resolution of the network. Increase to increase accuracy. Decrease to increase speed",
                         default = "416", type = str)
+    parser.add_argument('--checkpoint', type=str, help= 
+                        "Checkpoint name in format: `epoch.iteration`")
     
     return parser.parse_args()
     
@@ -59,7 +62,27 @@ classes = load_classes("data/coco.names")
 #Set up the neural network
 print("Loading network.....")
 model = Darknet(args.cfgfile)
-model.load_weights(args.weightsfile)
+
+if args.checkpoint:
+    # Load weights from checkpoint file
+    if args.checkpoint == 'pretrained':
+        start_epoch = -1
+        start_iteration = -1
+    else:
+        start_epoch, start_iteration = args.checkpoint.split('.')
+    
+    start_epoch, start_iteration, state_dict = load_checkpoint(
+        opj(config.CKPT_ROOT, 'coco'),
+        int(start_epoch),
+        int(start_iteration)
+    )
+    model.load_state_dict(state_dict)
+    print("Weights loaded from checkpoint file")
+    # Otherwise, load weights from darknet weights file
+else:
+    model.load_weights(args.weightsfile)
+    print("Model loaded from weights file")
+
 print("Network successfully loaded")
 
 model.net_info["height"] = args.reso
