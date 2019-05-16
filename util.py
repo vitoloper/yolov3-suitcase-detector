@@ -6,6 +6,8 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
 import cv2
+import os
+opj = os.path.join
 
 def load_classes(namesfile):
     """
@@ -246,3 +248,53 @@ def prep_image(img, inp_dim):
     img = img[:,:,::-1].transpose((2,0,1)).copy()
     img = torch.from_numpy(img).float().div(255.0).unsqueeze(0)
     return img
+
+def save_checkpoint(checkpoint_dir, epoch, iteration, save_dict):
+    """Save checkpoint to path
+    Args
+    - path: (str) absolute path to checkpoint folder
+    - epoch: (int) epoch of checkpoint file
+    - iteration: (int) iteration of checkpoint in one epoch
+    - save_dict: (dict) saving parameters dict
+
+    """
+
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    path = opj(checkpoint_dir, str(epoch) + '.' + str(iteration) + '.ckpt')
+    assert epoch == save_dict['epoch'], "[ERROR] epoch != save_dict's start_epoch"
+    assert iteration == save_dict['iteration'], "[ERROR] iteration != save_dict's start_iteration"
+    if os.path.isfile(path):
+        print("[WARNING] Overwrite checkpoint in epoch %d, iteration %d" %
+              (epoch, iteration))
+    try:
+        torch.save(save_dict, path)
+    except Exception:
+        raise Exception("[ERROR] Fail to save checkpoint")
+
+    print("[LOG] Checkpoint %d.%d.ckpt saved" % (epoch, iteration))
+
+def load_checkpoint(checkpoint_dir, epoch, iteration):
+    """Load checkpoint from path
+    Args
+    - checkpoint_dir: (str) absolute path to checkpoint folder
+    - epoch: (int) epoch of checkpoint
+    - iteration: (int) iteration of checkpoint in one epoch
+    Returns
+    - start_epoch: (int)
+    - start_iteration: (int)
+    - state_dict: (dict) state of model
+    
+    """
+
+    path = opj(checkpoint_dir, str(epoch) + '.' + str(iteration) + '.ckpt')
+    if not os.path.isfile(path):
+        raise Exception("Checkpoint in epoch %d doesn't exist" % epoch)
+
+    checkpoint = torch.load(path)
+    start_epoch = checkpoint['epoch']
+    state_dict = checkpoint['state_dict']
+    start_iteration = checkpoint['iteration']
+
+    assert epoch == start_epoch, "epoch != checkpoint's start_epoch"
+    assert iteration == start_iteration, "iteration != checkpoint's start_iteration"
+    return start_epoch, start_iteration, state_dict
