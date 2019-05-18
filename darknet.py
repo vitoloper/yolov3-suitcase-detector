@@ -189,7 +189,7 @@ class Darknet(nn.Module):
         self.blocks = parse_cfg(cfgfile)
         self.net_info, self.module_list = create_modules(self.blocks)
 
-    def forward(self, x, CUDA):
+    def forward(self, x, y_true, CUDA):
         modules = self.blocks[1:]   # first element is a net block which isn't part of the forward pass
         outputs = {}   #We cache the outputs for the route layer
 

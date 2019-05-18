@@ -142,7 +142,7 @@ for i, batch in enumerate(im_batches):
     if CUDA:
         batch = batch.cuda()
     with torch.no_grad():
-        prediction = model(Variable(batch), CUDA)
+        prediction = model(Variable(batch), None, CUDA)
 
     # prediction shape is D x 8, where D is the detection in the image.
     # e.g. in dog-cycle-car we have D=3 since the network detected 3 objects.
