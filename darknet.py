@@ -162,7 +162,7 @@ def create_modules(blocks):
             num_classes = int(x["classes"])
             ignore_thresh = float(x["ignore_thresh"])   # Not used
 
-            detection = DetectionLayerNoCuda(anchors, num_classes, net_info["height"], ignore_thresh)
+            detection = DetectionLayerNoCuda(anchors, num_classes, int(net_info["height"]), ignore_thresh)
             module.add_module("Detection_{}".format(index), detection)
 
         module_list.append(module)
@@ -192,6 +192,7 @@ class Darknet(nn.Module):
     def forward(self, x, y_true, CUDA):
         modules = self.blocks[1:]   # first element is a net block which isn't part of the forward pass
         outputs = {}   #We cache the outputs for the route layer
+        loss = dict()
 
         # This flag is used to indicate whether we have encountered the first detection or not.
         # If 0: the collector hasn't been initialized.
@@ -229,30 +230,44 @@ class Darknet(nn.Module):
                 from_ = int(module["from"])
                 x = outputs[i-1] + outputs[i+from_]
 
-            elif module_type == 'yolo':        
-                anchors = self.module_list[i][0].anchors
-                #Get the input dimensions
-                inp_dim = int (self.net_info["height"])
-        
-                #Get the number of classes
-                num_classes = int (module["classes"])
-        
-                #Transform 
-                x = x.data
-                # NOTE: predict_transform defined in util.py
-                # It takes a detection feature map and turns it into a 2D tensor.
-                # Each row of the tensor corresponds to attributes of a bounding box.
-                x = predict_transform(x, inp_dim, anchors, num_classes, CUDA)
-                if not write:              #if no collector has been intialised. 
-                    detections = x
-                    write = 1
-        
+            elif module_type == 'yolo':   
+                if self.training == True:
+                    loss_part = self.module_list[i][0](x, y_true)
+                    for key, value in loss_part.items():
+                        value = value
+                        loss[key] = loss[key] + \
+                            value if key in loss.keys() else value
+                        loss['total'] = loss['total'] + \
+                            value if 'total' in loss.keys() else value
                 else:
-                    detections = torch.cat((detections, x), 1)
+                    # THERE
+
+                    anchors = self.module_list[i][0].anchors
+                    #Get the input dimensions
+                    inp_dim = int (self.net_info["height"])
+            
+                    #Get the number of classes
+                    num_classes = int (module["classes"])
+            
+                    #Transform 
+                    x = x.data
+                    # NOTE: predict_transform defined in util.py
+                    # It takes a detection feature map and turns it into a 2D tensor.
+                    # Each row of the tensor corresponds to attributes of a bounding box.
+                    x = predict_transform(x, inp_dim, anchors, num_classes, CUDA)
+                    if not write:              #if no collector has been intialised. 
+                        detections = x
+                        write = 1
+            
+                    else:
+                        detections = torch.cat((detections, x), 1)
 
             outputs[i] = x
 
-        return detections
+        if self.training == True:
+            return loss
+        else:
+            return detections
 
     def load_weights(self, weightfile):
         """
