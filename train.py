@@ -9,6 +9,7 @@ import time
 import torch
 import argparse
 import warnings
+from pprint import pprint
 import numpy as np
 from PIL import Image
 import torch.nn as nn
@@ -26,7 +27,7 @@ def parse_arg():
     parser.add_argument('--reso', type=int, default=416,
                         help="Input image resolution")
     parser.add_argument('--lr', type=float, default=1e-3, help="Learning rate")
-    parser.add_argument('--bs', type=int, default=64, help="Batch size")
+    parser.add_argument('--bs', type=int, default=8, help="Batch size")
     # parser.add_argument('--dataset', type=str, help="Dataset name",
     #                     choices=['voc', 'coco', 'linemod'])
     parser.add_argument('--ckpt', type=str, default='-1.-1',
@@ -62,17 +63,22 @@ def train(epoch, trainloader, yolo, optimizer):
 
     # Compute 
     for batch_idx, (paths, inputs, targets) in enumerate(trainloader):
+        print('batch_idx: {:d}'.format(batch_idx))
+        print('epoch: {:d}'.format(epoch))
+        print('len(trainloader): {:d}'.format(len(trainloader)))
+        
         global_step = batch_idx + epoch * len(trainloader)
         # print(targets)  # Ground truth
         # forward + backward + optimize
         optimizer.zero_grad()
-        print("zero_grad called")
         
         # TODO: re-enable cuda
         # inputs = inputs.cuda()
 
         loss = yolo(inputs, targets, CUDA)
-        print('training loss: {0:6.3f}  global step: {1:6.0f}'.format(loss, global_step))
+        pprint('[LOSS]')
+        pprint(loss)
+        print('global step: {0:6.0f}'.format(global_step))
         # log(writer, 'training loss', loss, global_step)
         loss['total'].backward()
         optimizer.step()
