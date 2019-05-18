@@ -43,7 +43,7 @@ def arg_parse():
                         "Input resolution of the network. Increase to increase accuracy. Decrease to increase speed",
                         default = "416", type = str)
     parser.add_argument('--checkpoint', type=str, help= 
-                        "Checkpoint name in format: `epoch.iteration`")
+                        "Checkpoint name in format: `epoch.iteration` or 'pretrained' to use -1.-1")
     
     return parser.parse_args()
     

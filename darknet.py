@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
 from util import *
+from layers import DetectionLayer, DetectionLayerNoCuda
 
 
 def get_test_input():
@@ -28,10 +29,10 @@ class EmptyLayer(nn.Module):
         super(EmptyLayer, self).__init__()
 
 
-class DetectionLayer(nn.Module):
-    def __init__(self, anchors):
-        super(DetectionLayer, self).__init__()
-        self.anchors = anchors
+# class DetectionLayer(nn.Module):
+#     def __init__(self, anchors):
+#         super(DetectionLayer, self).__init__()
+#         self.anchors = anchors
 
 
 def parse_cfg(cfgfile):
@@ -158,7 +159,10 @@ def create_modules(blocks):
             anchors = [(anchors[i], anchors[i+1]) for i in range(0, len(anchors),2)]
             anchors = [anchors[i] for i in mask]
 
-            detection = DetectionLayer(anchors)
+            num_classes = int(x["classes"])
+            ignore_thresh = float(x["ignore_thresh"])   # Not used
+
+            detection = DetectionLayerNoCuda(anchors, num_classes, net_info["height"], ignore_thresh)
             module.add_module("Detection_{}".format(index), detection)
 
         module_list.append(module)
@@ -173,7 +177,13 @@ def create_modules(blocks):
 
 
 class Darknet(nn.Module):
-    """Darknet class"""
+    """
+    Darknet class
+
+    Args
+        - cfgfile: path to network config file
+    """
+
     def __init__(self, cfgfile):
         super(Darknet, self).__init__()
         self.blocks = parse_cfg(cfgfile)

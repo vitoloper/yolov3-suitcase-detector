@@ -105,3 +105,7 @@ venv.bak/
 
 # Weights file
 yolov3.weights
+
+# Checkpoints
+checkpoints
+

@@ -77,6 +77,12 @@ def bbox_iou(box1, box2):
     
     
     """
+
+    # if box1.is_cuda == True:
+    #     box1 = box1.cpu()
+    # if box2.is_cuda == True:
+    #    box2 = box2.cpu()
+
     #Get the coordinates of bounding boxes
     b1_x1, b1_y1, b1_x2, b1_y2 = box1[:,0], box1[:,1], box1[:,2], box1[:,3]
     b2_x1, b2_y1, b2_x2, b2_y2 = box2[:,0], box2[:,1], box2[:,2], box2[:,3]
@@ -298,3 +304,34 @@ def load_checkpoint(checkpoint_dir, epoch, iteration):
     assert epoch == start_epoch, "epoch != checkpoint's start_epoch"
     assert iteration == start_iteration, "iteration != checkpoint's start_iteration"
     return start_epoch, start_iteration, state_dict
+
+def get_current_time():
+    """Get current datetime
+    Returns
+    - time: (str) time in format "month-dd"
+    
+    """
+
+    time = str(datetime.datetime.now())
+    dhms = time.split('-')[-1].split('.')[0]
+    day, hour, minute, _ = dhms.replace(' ', ':').split(':')
+    month = calendar.month_name[int(time.split('-')[1])][:3]
+    time = month + '.' + day
+    return str(time)
+
+def xywh2xyxy(bbox):
+    """
+    Coordinate conversion xywh -> xyxy
+    
+    """
+
+    bbox_ = bbox.clone()
+    if len(bbox_.size()) == 1:
+        bbox_ = bbox_.unsqueeze(0)
+    xc, yc = bbox_[..., 0], bbox_[..., 1]
+    half_w, half_h = bbox_[..., 2] / 2, bbox_[..., 3] / 2
+    bbox_[..., 0] = xc - half_w
+    bbox_[..., 1] = yc - half_h
+    bbox_[..., 2] = xc + 2 * half_w
+    bbox_[..., 3] = yc + 2 * half_h
+    return bbox_
