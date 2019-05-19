@@ -293,6 +293,8 @@ class Darknet(nn.Module):
     
             #If module_type is convolutional load weights
             #Otherwise ignore.
+
+            # print(self.module_list[i])
             
             if module_type == "convolutional":
                 model = self.module_list[i]

@@ -61,7 +61,7 @@ def train(epoch, trainloader, yolo, optimizer):
     # tbar = tqdm(trainloader, ncols=80, ascii=True)
     # tbar.set_description('training')
 
-    # Compute 
+    # Compute for each batch
     for batch_idx, (paths, inputs, targets) in enumerate(trainloader):
         print('batch_idx: {:d}'.format(batch_idx))
         print('epoch: {:d}'.format(epoch))
@@ -70,17 +70,24 @@ def train(epoch, trainloader, yolo, optimizer):
         global_step = batch_idx + epoch * len(trainloader)
         # print(targets)  # Ground truth
         # forward + backward + optimize
+        
+        # Zeroes the gradient buffers of all parameters
         optimizer.zero_grad()
         
         # TODO: re-enable cuda
         # inputs = inputs.cuda()
 
         loss = yolo(inputs, targets, CUDA)
+        
         pprint('[LOSS]')
         pprint(loss)
         print('global step: {0:6.0f}'.format(global_step))
         # log(writer, 'training loss', loss, global_step)
+        
+        # Backpropagation (backpropagate the error, the whole graph is differentiated w.r.t. the loss)
         loss['total'].backward()
+
+        # Update the parameters
         optimizer.step()
 
         # tbar.set_postfix(loss=loss['total'])
@@ -111,53 +118,32 @@ if __name__ == '__main__':
         int(start_iteration)
     )
 
-    # IMPORTANT: we should exclude the three conv layers that preceed the detection ([yolo]) layers.
-    # This because the pretrained weights refer to the conv layers with filters=255, so
-    # torch.Size([255, 1024, 1, 1]).
-    # Instead, we now have (1 class prediction) and torch.Size([18, 1024, 1, 1]) (filters=18).
-    # Same thing for the bias.
-    # (Weights and biases are the model parameters learned).
-
-    # size mismatch for module_list.81.conv_81.weight: copying a param of torch.Size([18, 1024, 1, 1]) from checkpoint, where the shape is torch.Size([255, 1024, 1, 1]) in current model.
-    # size mismatch for module_list.81.conv_81.bias: copying a param of torch.Size([18]) from checkpoint, where the shape is torch.Size([255]) in current model.
-    # size mismatch for module_list.93.conv_93.weight: copying a param of torch.Size([18, 512, 1, 1]) from checkpoint, where the shape is torch.Size([255, 512, 1, 1]) in current model.
-    # size mismatch for module_list.93.conv_93.bias: copying a param of torch.Size([18]) from checkpoint, where the shape is torch.Size([255]) in current model.
-    # size mismatch for module_list.105.conv_105.weight: copying a param of torch.Size([18, 256, 1, 1]) from checkpoint, where the shape is torch.Size([255, 256, 1, 1]) in current model.
-    # size mismatch for module_list.105.conv_105.bias: copying a param of torch.Size([18]) from checkpoint, where the shape is torch.Size([255]) in current model.
-
-    pretrained_dict = state_dict
-    model_dict = yolo.state_dict()
-
-    layers_to_exclude = ['module_list.81.conv_81.weight',
-    'module_list.81.conv_81.bias',
-    'module_list.93.conv_93.weight',
-    'module_list.93.conv_93.bias',
-    'module_list.105.conv_105.weight',
-    'module_list.105.conv_105.bias']
-
-    # 1. filter out unnecessary keys
-    pretrained_dict = {k: v for k, v in pretrained_dict.items() if (k in model_dict and k not in layers_to_exclude)}
-    # 2. overwrite entries in the existing state dict
-    model_dict.update(pretrained_dict)
-
-    # See which items will be loaded
-    # for key, value in pretrained_dict.items():
-    #     print(key)
-
-    # 3. load the new state dict
-    yolo.load_state_dict(model_dict)
+    # Load state dict
+    yolo.load_state_dict(state_dict)
 
     print("[LOG] Checkpoint loaded ({:d}.{:d})".format(start_epoch, start_iteration))
 
-    # Freeze layers
+    # Freeze the first 74 layers
+    after_stop_layer = False
+    stop_layer_name = 'module_list.75.conv_75.weight'
     for name, param in yolo.named_parameters():
-        if name not in layers_to_exclude:
+        if name == stop_layer_name or after_stop_layer:
+            param.requires_grad = True
+            after_stop_layer = True
+        else:
             param.requires_grad = False
 
+    # Freeze layers:
+    # Freeze layers
+    # for name, param in yolo.named_parameters():
+    #     if name not in layers_to_exclude:
+    #         param.requires_grad = False
+
     # DEBUG: print trainable layers name
+    print("[LOG] List of trainable parameters:")
     for name, param in yolo.named_parameters():
-         if param.requires_grad:
-             print (name)
+        if param.requires_grad:
+            print(name)
 
     # Enable CUDA
     # yolo = yolo.cuda()
@@ -174,18 +160,26 @@ if __name__ == '__main__':
 
     # Start training
     optimizer = optim.SGD(filter(lambda p: p.requires_grad, yolo.parameters()),
-                          lr=args.lr, momentum=0.9, weight_decay=5e-4, nesterov=True)
+                          lr=args.lr, momentum=0.8, weight_decay=5e-4)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
 
     for epoch in range(start_epoch, start_epoch+100):
         print("\n[LOG] Epoch", epoch)
-        scheduler.step()
+        
+        # scheduler.step()
 
         # Call training wrapper
         train(epoch, train_dataloader, yolo, optimizer)
 
-        # save_checkpoint(opj(config.CKPT_ROOT, args.dataset), epoch + 1, 0, {
-        #     'epoch': epoch + 1,
-        #     'iteration': 0,
-        #     'state_dict': yolo.module.state_dict()
-# })
+        # TODO: validate (by using validation set)
+
+        scheduler.step()
+
+        if (epoch == 10):
+            save_checkpoint(opj(config.CKPT_ROOT, config.DATASET), epoch + 1, 0, {
+                 'epoch': epoch + 1,
+                 'iteration': 0,
+                 'state_dict': yolo.state_dict()})
+
+            print('Checkpoint saved, exiting.')
+            sys.exit(0)
