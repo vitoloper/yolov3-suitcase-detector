@@ -11,7 +11,7 @@ def parse_arg():
     parser = argparse.ArgumentParser("Transfer .weights to PyTorch checkpoint")
     parser.add_argument('--weights', default='yolov3.weights',
                         type=str, help=".weights file name (stored in checkpoint/darknet)")
-    parser.add_argument('--cutoff', default=None,
+    parser.add_argument('--cutoff', default=75,
                         type=int, help="Layer cutoff value")
     return parser.parse_args()
 
