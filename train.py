@@ -26,7 +26,7 @@ def parse_arg():
     parser = argparse.ArgumentParser(description='YOLO v3 training')
     parser.add_argument('--reso', type=int, default=416,
                         help="Input image resolution")
-    parser.add_argument('--lr', type=float, default=1e-3, help="Learning rate")
+    parser.add_argument('--lr', type=float, default=1e-5, help="Learning rate")
     parser.add_argument('--bs', type=int, default=8, help="Batch size")
     # parser.add_argument('--dataset', type=str, help="Dataset name",
     #                     choices=['voc', 'coco', 'linemod'])
@@ -148,7 +148,17 @@ if __name__ == '__main__':
     yolo.load_state_dict(model_dict)
 
     print("[LOG] Checkpoint loaded ({:d}.{:d})".format(start_epoch, start_iteration))
-    
+
+    # Freeze layers
+    for name, param in yolo.named_parameters():
+        if name not in layers_to_exclude:
+            param.requires_grad = False
+
+    # DEBUG: print trainable layers name
+    for name, param in yolo.named_parameters():
+         if param.requires_grad:
+             print (name)
+
     # Enable CUDA
     # yolo = yolo.cuda()
 
