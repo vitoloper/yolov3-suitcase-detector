@@ -256,7 +256,7 @@ class Darknet(nn.Module):
         else:
             return detections
 
-    def load_weights(self, weightfile):
+    def load_weights(self, weightfile, cutoff=None):
         """
         Load the weights
 
@@ -276,10 +276,20 @@ class Darknet(nn.Module):
         
         # Read weights from file
         weights = np.fromfile(fp, dtype = np.float32)
+
+        # Cutoff
+        if cutoff is not None:
+            cutoff = cutoff + 1     # layer[i] = blocks[i + 1] because of [net] block
         
         ptr = 0
         for i in range(len(self.module_list)):
             module_type = self.blocks[i + 1]["type"]
+
+            #print(module_type)
+
+            if cutoff is not None and (i+1) == cutoff:
+                print("Stop before {:s} layer (No. {:d})".format( module_type, i))
+                break
     
             #If module_type is convolutional load weights
             #Otherwise ignore.

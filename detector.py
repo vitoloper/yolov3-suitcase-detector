@@ -44,7 +44,11 @@ def arg_parse():
                         default = "416", type = str)
     parser.add_argument('--checkpoint', type=str, help= 
                         "Checkpoint name in format: `epoch.iteration` or 'pretrained' to use -1.-1")
-    
+    parser.add_argument('--cutoff', default=None,
+                        type=int, help="Layer cutoff value")
+    parser.add_argument('--num_classes', default=80, type=int, help="Number of classes")
+    parser.add_argument('--classes', default="data/coco.names", type=str, help="Class names file")
+
     return parser.parse_args()
     
 args = arg_parse()
@@ -52,12 +56,15 @@ images = args.images
 batch_size = int(args.bs)
 confidence = float(args.confidence)
 nms_thesh = float(args.nms_thresh)
+cutoff = args.cutoff
 start = 0
 CUDA = torch.cuda.is_available()
 
 # Set number of classes and load class names
-num_classes = 80
-classes = load_classes("data/coco.names")
+#num_classes = 1
+#classes = load_classes("data/suitcase.names")
+num_classes = args.num_classes
+classes = load_classes(args.classes)
 
 #Set up the neural network
 print("Loading network.....")
@@ -80,7 +87,7 @@ if args.checkpoint:
     print("Weights loaded from checkpoint file")
     # Otherwise, load weights from darknet weights file
 else:
-    model.load_weights(args.weightsfile)
+    model.load_weights(args.weightsfile, cutoff=cutoff)
     print("Model loaded from weights file")
 
 print("Network successfully loaded")
@@ -175,6 +182,7 @@ for i, batch in enumerate(im_batches):
         im_id = i*batch_size + im_num
         objs = [classes[int(x[-1])] for x in output if int(x[0]) == im_id]
         print("{0:20s} predicted in {1:6.3f} seconds".format(image.split("/")[-1], (end - start)/batch_size))
+        print('Number of objects detected: ', len(objs))
         print("{0:20s} {1:s}".format("Objects Detected:", " ".join(objs)))
 
         # TODO: print box confidence score and class confidence score for each object
