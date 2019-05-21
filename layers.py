@@ -136,7 +136,7 @@ class DetectionLayer(nn.Module):
             loss['cls'] = CELoss((pred_cls * obj_mask.unsqueeze(-1)).view(-1, self.num_classes),
                                  (gt_cls * obj_mask).view(-1).long())
             loss['conf'] = MSELoss(pred_conf * obj_mask * 5, gt_conf * obj_mask * 5) + \
-                MSELoss(pred_conf * (1 - obj_mask), pred_conf * (1 - obj_mask))
+                MSELoss(pred_conf * (1 - obj_mask), gt_conf * (1 - obj_mask))
 
             pprint(loss)
 
