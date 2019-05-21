@@ -2,6 +2,7 @@ from util import save_checkpoint, load_checkpoint
 from dataset import prepare_train_dataset, prepare_val_dataset
 from darknet import Darknet
 # from model import YOLOv3
+import time
 import config
 import os
 import sys
@@ -167,12 +168,14 @@ if __name__ == '__main__':
     print("[LOG] Batch size:", args.bs)
     print("[LOG] Learning rate:", args.lr)
     print("[LOG] Number of epochs:", args.epochs)
+    
     # Start training
+    start_time = time.time()
     optimizer = optim.SGD(filter(lambda p: p.requires_grad, yolo.parameters()),
                           lr=args.lr, momentum=0.8, weight_decay=5e-4, nesterov=True)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
 
-    for epoch in range(start_epoch, start_epoch+100):
+    for epoch in range(start_epoch, start_epoch+args.epochs):
         print("\n[LOG] Epoch", epoch)
         
         # scheduler.step()
@@ -184,11 +187,12 @@ if __name__ == '__main__':
 
         scheduler.step()
 
-        if (epoch == args.epochs):
-            save_checkpoint(opj(config.CKPT_ROOT, config.DATASET), epoch + 1, 0, {
-                 'epoch': epoch + 1,
-                 'iteration': 0,
-                 'state_dict': yolo.state_dict()})
 
-            print('Checkpoint saved, exiting.')
-            sys.exit(0)
+    # Save checkpoint , print summary and exit
+    end_time = time.time()
+    save_checkpoint(opj(config.CKPT_ROOT, config.DATASET), epoch + 1, 0, {
+         'epoch': epoch + 1,
+         'iteration': 0,
+         'state_dict': yolo.state_dict()})
+
+    print("Total training time (in seconds): {:2.3f}".format(end_time - start_time))

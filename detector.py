@@ -149,6 +149,8 @@ for i, batch in enumerate(im_batches):
     if CUDA:
         batch = batch.cuda()
     with torch.no_grad():
+        # NOTE: the input should have the shape [batch_dimension, channel, height, width].
+        # Here batch_dimension is 1 because we do detection on single images, one at time.
         prediction = model(Variable(batch), None, CUDA)
 
     # prediction shape is D x 8, where D is the detection in the image.
