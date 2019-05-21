@@ -26,12 +26,14 @@ def parse_arg():
     parser = argparse.ArgumentParser(description='YOLO v3 training')
     parser.add_argument('--reso', type=int, default=416,
                         help="Input image resolution")
-    parser.add_argument('--lr', type=float, default=1e-5, help="Learning rate")
+    parser.add_argument('--lr', type=float, default=1e-4, help="Learning rate")
     parser.add_argument('--bs', type=int, default=8, help="Batch size")
     # parser.add_argument('--dataset', type=str, help="Dataset name",
     #                     choices=['voc', 'coco', 'linemod'])
     parser.add_argument('--ckpt', type=str, default='-1.-1',
                         help="Checkpoint name in format: `epoch.iteration`")
+    parser.add_argument('--epochs', type=int, default=50,
+                        help="Number of epochs before saving and exiting")
     parser.add_argument('--gpu', type=str, default='0', help="GPU id")
     parser.add_argument('--seq', type=str, help="LINEMOD sequence number")
     return parser.parse_args()
@@ -77,6 +79,8 @@ def train(epoch, trainloader, yolo, optimizer):
         # TODO: re-enable cuda
         # inputs = inputs.cuda()
 
+        # input is a Tensor of shape (8, 3, 416, 416): 8 images, 3 channels (RGB), width, height
+        # target is a tuple of 8 elements. Each one contains target (normalized) x,y,w,h and class.
         loss = yolo(inputs, targets, CUDA)
         
         pprint('[LOSS]')
@@ -85,6 +89,7 @@ def train(epoch, trainloader, yolo, optimizer):
         # log(writer, 'training loss', loss, global_step)
         
         # Backpropagation (backpropagate the error, the whole graph is differentiated w.r.t. the loss)
+        # (gradient calculation)
         loss['total'].backward()
 
         # Update the parameters
@@ -140,10 +145,10 @@ if __name__ == '__main__':
     #         param.requires_grad = False
 
     # DEBUG: print trainable layers name
-    print("[LOG] List of trainable parameters:")
-    for name, param in yolo.named_parameters():
-        if param.requires_grad:
-            print(name)
+    # print("[LOG] List of trainable parameters:")
+    # for name, param in yolo.named_parameters():
+    #     if param.requires_grad:
+    #         print(name)
 
     # Enable CUDA
     # yolo = yolo.cuda()
@@ -158,9 +163,13 @@ if __name__ == '__main__':
     print("[LOG] Number of training images:", len(train_img_datasets))
     print("[LOG] Number of validation images:", len(val_img_datasets))
 
+    print("[LOG] Image input resolution:", args.reso)
+    print("[LOG] Batch size:", args.bs)
+    print("[LOG] Learning rate:", args.lr)
+    print("[LOG] Number of epochs:", args.epochs)
     # Start training
     optimizer = optim.SGD(filter(lambda p: p.requires_grad, yolo.parameters()),
-                          lr=args.lr, momentum=0.8, weight_decay=5e-4)
+                          lr=args.lr, momentum=0.8, weight_decay=5e-4, nesterov=True)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
 
     for epoch in range(start_epoch, start_epoch+100):
@@ -175,7 +184,7 @@ if __name__ == '__main__':
 
         scheduler.step()
 
-        if (epoch == 10):
+        if (epoch == args.epochs):
             save_checkpoint(opj(config.CKPT_ROOT, config.DATASET), epoch + 1, 0, {
                  'epoch': epoch + 1,
                  'iteration': 0,
