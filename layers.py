@@ -185,6 +185,7 @@ class DetectionLayerNoCuda(nn.Module):
             [(a_w / stride, a_h / stride) for a_w, a_h in self.anchors])
 
         # Re-organize [bs, (5+nC)*nA, gs, gs] => [bs, nA, gs, gs, 5+nC]
+        # bs: batch size. nC: # of classes. nA: # of anchors. gs: grid size
         x = x.view(bs, nA, num_attrs, gs, gs).permute(
             0, 1, 3, 4, 2).contiguous()
 
@@ -217,6 +218,7 @@ class DetectionLayerNoCuda(nn.Module):
             pred[..., :4] *= stride
             return pred.view(bs, -1, num_attrs)
         else:
+            # gt means 'ground truth'
             gt_tx = torch.zeros(bs, nA, gs, gs, requires_grad=False)
             gt_ty = torch.zeros(bs, nA, gs, gs, requires_grad=False)
             gt_tw = torch.zeros(bs, nA, gs, gs, requires_grad=False)
@@ -225,6 +227,8 @@ class DetectionLayerNoCuda(nn.Module):
             gt_cls = torch.zeros(bs, nA, gs, gs, requires_grad=False)
 
             obj_mask = torch.zeros(bs, nA, gs, gs, requires_grad=False)
+            
+            # Loop for each element in current batch
             for idx in range(bs):
                 for y_true_one in y_true[idx]:
                     y_true_one = y_true_one
@@ -237,6 +241,11 @@ class DetectionLayerNoCuda(nn.Module):
 
                     pred_bbox = pred[idx, :, gt_j, gt_i, :4]
                     ious = bbox_iou(xywh2xyxy(pred_bbox), xywh2xyxy(gt_bbox))
+                    
+                    # best_iou: best intersection over unit
+                    # best_a: best anchor (index)
+                    # At each scale, each cell predicts 3 bboxes using 3 anchors
+                    # So here best_a will vary between 0 and 2
                     best_iou, best_a = torch.max(ious, 0)
 
                     w, h = scaled_anchors[best_a]
@@ -260,10 +269,24 @@ class DetectionLayerNoCuda(nn.Module):
             loss['h'] = MSELoss(pred_th * obj_mask, gt_th * obj_mask)
             # loss['cls'] = BCELoss(pred_cls * obj_mask, cls_mask * obj_mask)
 
+
+            # print('pred_cls: ', pred_cls)
+            # print('obj_mask.unsqueeze(-1): ', obj_mask.unsqueeze(-1))
+            # print('gt_cls: ', gt_cls)
+            # print('obj_mask', obj_mask)
+            
+            print("gt_cls shape", gt_cls.shape)
+            # print(gt_cls)
+            # print('CELoss first arg: ', (pred_cls * obj_mask.unsqueeze(-1)).view(-1, self.num_classes))
+            # print('CELoss second arg: ', (gt_cls * obj_mask).view(-1).long())
+            # print(len((pred_cls * obj_mask.unsqueeze(-1)).view(-1, self.num_classes)))
+            # print(len((gt_cls * obj_mask).view(-1).long()))
+
             loss['cls'] = CELoss((pred_cls * obj_mask.unsqueeze(-1)).view(-1, self.num_classes),
-                                 (gt_cls * obj_mask).view(-1).long())
+                                (gt_cls * obj_mask).view(-1).long())
+
             loss['conf'] = MSELoss(pred_conf * obj_mask * 5, gt_conf * obj_mask * 5) + \
-                MSELoss(pred_conf * (1 - obj_mask), pred_conf * (1 - obj_mask))
+                MSELoss(pred_conf * (1 - obj_mask), gt_conf * (1 - obj_mask))
 
             pprint(loss)
 
