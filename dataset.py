@@ -183,8 +183,8 @@ def prepare_train_dataset(name, reso, batch_size, **kwargs):
     transform = transforms.Compose([
         # transforms.RandomResizedCrop(size=reso, interpolation=3),
         transforms.Resize(size=(reso, reso), interpolation=3),
-        transforms.ColorJitter(brightness=1.5, saturation=1.5, hue=0.2),
-        transforms.RandomVerticalFlip(),
+        # transforms.ColorJitter(brightness=1.5, saturation=1.5, hue=0.2),
+        # transforms.RandomVerticalFlip(),
         transforms.ToTensor()
     ])
 
