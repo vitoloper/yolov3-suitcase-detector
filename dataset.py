@@ -1,6 +1,7 @@
 import config
 import os
 import time
+import sys
 import torch
 import pickle
 import numpy as np
@@ -10,17 +11,24 @@ from xml.etree import ElementTree
 from torchvision import transforms
 from torchvision.datasets import CocoDetection
 from torch.utils.data.dataloader import default_collate
+import imgaug as ia
+import imgaug.augmenters as iaa
+from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
+
 opj = os.path.join
 
+# Seed imgaug
+ia.seed(int(time.time()))
 
 class CocoDataset(CocoDetection):
-    def __init__(self, root, annFile, transform):
+    def __init__(self, root, annFile, transform, reso):
         super().__init__(
             root=root,
             annFile=annFile,
-            transform=transform
+            transform=transform,
         )
         self.class_map = config.datasets['coco']['category_id_mapping']
+        self.reso = reso
 
     def __getitem__(self, index):
         """
@@ -38,16 +46,85 @@ class CocoDataset(CocoDetection):
         w, h = img.size
         target = coco.loadAnns(ann_ids)
         annos = torch.zeros(len(target), 5)
+
+        # if self.reso is None, skip the whole image augmentation part.
+        # Apply image augmentations before coordinate conversion, resizing and toTensor transform.
+        if self.reso is not None:
+            #Convert image to numpy array
+            img = np.array(img)
+
+            # Get all the annotations (bboxes)
+            bboxes = []
+            for i in range(len(target)):
+                bbox = torch.Tensor(target[i]['bbox'])
+                bbox_x = bbox[0]
+                bbox_y = bbox[1]
+                bbox_w = bbox[2]
+                bbox_h = bbox[3]
+                bboxes.append(BoundingBox(x1=bbox_x, y1=bbox_y, x2=bbox_x+bbox_w, y2=bbox_y+bbox_h))
+            bbs = BoundingBoxesOnImage(bboxes, shape=img.shape)
+
+            # NOTE: resize first, otherwise rotating will crop the image (since image is not square)
+            # Rescale image and bounding boxes
+            img = ia.imresize_single_image(img, (self.reso, self.reso))
+            bbs = bbs.on(img)
+
+            seq = iaa.Sequential([])
+            # Define augmentations
+            seq = iaa.Sequential([
+                # iaa.ChangeColorspace(from_colorspace="RGB", to_colorspace="HSV"),
+                # iaa.WithChannels(1, iaa.Add((-50, 50))),    # Change saturation
+                # iaa.WithChannels(2, iaa.Add((-50,50))),      # Change intensity
+                # iaa.ChangeColorspace(from_colorspace="HSV", to_colorspace="RGB"),
+                # iaa.Sometimes(0.5, iaa.Affine(rotate=90)),  # Rotate 90 deg. (0.5 probability)
+                # iaa.Affine(shear=(-2, 2)),  # Shear (-2 +2 degrees)
+                # iaa.Flipud(0.5),    # Flip up-down (with 0.5 probability)
+                # iaa.Fliplr(0.5)     # Flip left-right (with 0.5 probability)
+            ])
+
+            img_aug, bbs_aug = seq(image=img, bounding_boxes=bbs)
+
+            # # DEBUG: output image
+            # image_after = bbs_aug.draw_on_image(img_aug)
+            # # Convert numpy array to PIL image
+            # image_after = Image.fromarray(image_after, 'RGB')
+            # image_after.save('debug.png')
+            # print(path)
+            # print("DEBUG IMAGE SAVED")
+            # print(bbox)
+            # print(bbs_aug)
+            # # sys.exit(0)
+
+            # Overwrite original image
+            img = img_aug
+            
+
         for i in range(len(target)):
             # [x1, y1, w, h] => [xc, yc, w, h]
-            bbox = torch.Tensor(target[i]['bbox'])
+
+            # if self.reso is not None it means we have to update the bounding boxes coordinates
+            if self.reso is not None:
+                bbox = []
+                bbox.append(int(bbs_aug.bounding_boxes[i].x1))
+                bbox.append(int(bbs_aug.bounding_boxes[i].y1))
+                bbox.append(int(bbs_aug.bounding_boxes[i].x2))
+                bbox.append(int(bbs_aug.bounding_boxes[i].y2))
+                bbox = torch.Tensor(bbox)
+                # print(bbox)
+                # print()
+            else:
+                bbox = torch.Tensor(target[i]['bbox'])
+
             annos[i, 0] = (bbox[0] + bbox[2] / 2) / w
             annos[i, 1] = (bbox[1] + bbox[3] / 2) / h
             annos[i, 2] = bbox[2] / w
             annos[i, 3] = bbox[3] / h
             annos[i, 4] = self.class_map[int(target[i]['category_id'])]
-        if self.transform is not None:
-            img = self.transform(img)
+        
+        # ndarray -> Tensor conversion
+        img = torch.from_numpy(img.transpose((2, 0, 1)).copy())
+        img = img.type('torch.FloatTensor')
+
         return path, img, annos
 
     @staticmethod
@@ -180,9 +257,12 @@ def prepare_train_dataset(name, reso, batch_size, **kwargs):
     - img_datasets: (CocoDataset) image datasets
     - trainloader: (Dataloader) dataloader for training
     """
+
+    # We just want to transform the image into a tensor, since augmentations
+    # are already performed in CocoDataset (only for training dataset)
     transform = transforms.Compose([
         # transforms.RandomResizedCrop(size=reso, interpolation=3),
-        transforms.Resize(size=(reso, reso), interpolation=3),
+        # transforms.Resize(size=(reso, reso), interpolation=3),
         # transforms.ColorJitter(brightness=1.5, saturation=1.5, hue=0.2),
         # transforms.RandomVerticalFlip(),
         transforms.ToTensor()
@@ -194,7 +274,8 @@ def prepare_train_dataset(name, reso, batch_size, **kwargs):
         img_datasets = CocoDataset(
             root=path['train_imgs'],
             annFile=path['train_anno'],
-            transform=transform
+            transform=None,     # Don't use any transformation
+            reso=reso
         )
         dataloder = torch.utils.data.DataLoader(
             img_datasets,
@@ -251,7 +332,8 @@ def prepare_val_dataset(name, reso, batch_size, **kwargs):
         img_datasets = CocoDataset(
             root=path['val_imgs'],
             annFile=path['val_anno'],
-            transform=transform
+            transform=transform,
+            reso=None
         )
         dataloder = torch.utils.data.DataLoader(
             img_datasets,
