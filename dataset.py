@@ -71,14 +71,14 @@ class CocoDataset(CocoDetection):
 
             # Define augmentations
             seq = iaa.Sequential([
-                # iaa.ChangeColorspace(from_colorspace="RGB", to_colorspace="HSV"),
-                # iaa.WithChannels(1, iaa.Add((-50, 50))),    # Change saturation
-                # iaa.WithChannels(2, iaa.Add((-50,50))),      # Change intensity
-                # iaa.ChangeColorspace(from_colorspace="HSV", to_colorspace="RGB"),
-                # iaa.Sometimes(0.5, iaa.Affine(rotate=90)),  # Rotate 90 deg. (0.5 probability)
-                # iaa.Affine(shear=(-2, 2)),  # Shear (-2 +2 degrees)
-                # iaa.Flipud(0.5),    # Flip up-down (with 0.5 probability)
-                # iaa.Fliplr(0.5)     # Flip left-right (with 0.5 probability)
+                iaa.ChangeColorspace(from_colorspace="RGB", to_colorspace="HSV"),
+                iaa.WithChannels(1, iaa.Add((-50, 50))),    # Change saturation
+                iaa.WithChannels(2, iaa.Add((-50,50))),      # Change intensity
+                iaa.ChangeColorspace(from_colorspace="HSV", to_colorspace="RGB"),
+                iaa.Sometimes(0.5, iaa.Affine(rotate=90)),  # Rotate 90 deg. (0.5 probability)
+                iaa.Affine(shear=(-2, 2)),  # Shear (-2 +2 degrees)
+                iaa.Flipud(0.5),    # Flip up-down (with 0.5 probability)
+                iaa.Fliplr(0.5)     # Flip left-right (with 0.5 probability)
             ])
 
             img_aug, bbs_aug = seq(image=img, bounding_boxes=bbs)
@@ -121,10 +121,14 @@ class CocoDataset(CocoDetection):
             annos[i, 2] = bbox[2] / w
             annos[i, 3] = bbox[3] / h
             annos[i, 4] = self.class_map[int(target[i]['category_id'])]
-        
+
+        #if self.transform is not None:
+        #    img = self.transform(img)
+
         # ndarray -> Tensor conversion
         img = torch.from_numpy(img.transpose((2, 0, 1)).copy())
-        img = img.type('torch.FloatTensor')
+        if isinstance(img, torch.ByteTensor):
+            img = img.float().div(255)
 
         return path, img, annos
 

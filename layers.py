@@ -275,7 +275,7 @@ class DetectionLayerNoCuda(nn.Module):
             # print('gt_cls: ', gt_cls)
             # print('obj_mask', obj_mask)
             
-            print("gt_cls shape", gt_cls.shape)
+            # print("gt_cls shape", gt_cls.shape)
             # print(gt_cls)
             # print('CELoss first arg: ', (pred_cls * obj_mask.unsqueeze(-1)).view(-1, self.num_classes))
             # print('CELoss second arg: ', (gt_cls * obj_mask).view(-1).long())
