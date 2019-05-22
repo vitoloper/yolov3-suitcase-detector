@@ -69,7 +69,6 @@ class CocoDataset(CocoDetection):
             img = ia.imresize_single_image(img, (self.reso, self.reso))
             bbs = bbs.on(img)
 
-            seq = iaa.Sequential([])
             # Define augmentations
             seq = iaa.Sequential([
                 # iaa.ChangeColorspace(from_colorspace="RGB", to_colorspace="HSV"),
@@ -107,9 +106,11 @@ class CocoDataset(CocoDetection):
                 bbox = []
                 bbox.append(int(bbs_aug.bounding_boxes[i].x1))
                 bbox.append(int(bbs_aug.bounding_boxes[i].y1))
-                bbox.append(int(bbs_aug.bounding_boxes[i].x2))
-                bbox.append(int(bbs_aug.bounding_boxes[i].y2))
+                bbox.append(int(bbs_aug.bounding_boxes[i].x2) - int(bbs_aug.bounding_boxes[i].x1))
+                bbox.append(int(bbs_aug.bounding_boxes[i].y2) - int(bbs_aug.bounding_boxes[i].y1))
                 bbox = torch.Tensor(bbox)
+                w = self.reso
+                h = self.reso
                 # print(bbox)
                 # print()
             else:
